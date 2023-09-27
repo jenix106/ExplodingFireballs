@@ -72,7 +72,7 @@ namespace ExplodingFireballs
             Collider[] sphereContacts = Physics.OverlapSphere(contactPoint, explosionRadius, 232799233);
             List<Creature> creaturesPushed = new List<Creature>();
             List<Rigidbody> rigidbodiesPushed = new List<Rigidbody>();
-            rigidbodiesPushed.Add(item.rb);
+            rigidbodiesPushed.Add(item.physicBody.rigidBody);
             creaturesPushed.Add(Player.local.creature);
             foreach (Creature creature in Creature.allActive)
             {
@@ -94,6 +94,30 @@ namespace ExplodingFireballs
             }
             foreach (Collider collider in sphereContacts)
             {
+                Breakable breakable = collider.attachedRigidbody?.GetComponentInParent<Breakable>();
+                if (breakable != null)
+                {
+                    if (explosionForce * explosionForce > breakable.instantaneousBreakVelocityThreshold)
+                        breakable.Break();
+                    for (int index = 0; index < breakable.subBrokenItems.Count; ++index)
+                    {
+                        Rigidbody rigidBody = breakable.subBrokenItems[index].physicBody.rigidBody;
+                        if (rigidBody && !rigidbodiesPushed.Contains(rigidBody))
+                        {
+                            rigidBody.AddExplosionForce(explosionForce, contactPoint, explosionRadius, 0.5f, ForceMode.VelocityChange);
+                            rigidbodiesPushed.Add(rigidBody);
+                        }
+                    }
+                    for (int index = 0; index < breakable.subBrokenBodies.Count; ++index)
+                    {
+                        PhysicBody subBrokenBody = breakable.subBrokenBodies[index];
+                        if (subBrokenBody && !rigidbodiesPushed.Contains(subBrokenBody.rigidBody))
+                        {
+                            subBrokenBody.rigidBody.AddExplosionForce(explosionForce, contactPoint, explosionRadius, 0.5f, ForceMode.VelocityChange);
+                            rigidbodiesPushed.Add(subBrokenBody.rigidBody);
+                        }
+                    }
+                }
                 if (collider.attachedRigidbody != null && !collider.attachedRigidbody.isKinematic && Vector3.Distance(contactPoint, collider.transform.position) < explosionRadius)
                 {
                     if (collider.attachedRigidbody.gameObject.layer != GameManager.GetLayer(LayerName.NPC) && !rigidbodiesPushed.Contains(collider.attachedRigidbody))
@@ -143,7 +167,7 @@ namespace ExplodingFireballs
         public void Start()
         {
             creature = GetComponent<Creature>();
-            instance = Catalog.GetData<EffectData>(burnEffectId).Spawn(creature.ragdoll.rootPart.transform, true);
+            instance = Catalog.GetData<EffectData>(burnEffectId).Spawn(creature.ragdoll.rootPart.transform, null, true);
             instance.SetRenderer(creature.GetRendererForVFX(), false);
             instance.SetIntensity(1f);
             instance.Play();
